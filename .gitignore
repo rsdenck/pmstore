@@ -1,0 +1,30 @@
+# Credentials & secrets
+.env
+.env.*
+secrets/
+*.pem
+*.key
+
+# Logs
+*.log
+/var/log/lxchub/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Temp
+tmp/
+*.tmp
+
+# IDE
+.idea/
+.vscode/
+*.sublime-*
+
+# Git
+*.orig
+*.bak

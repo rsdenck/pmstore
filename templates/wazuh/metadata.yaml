@@ -1,0 +1,35 @@
+name: Wazuh Manager
+slug: wazuh
+version: latest
+author: PMO Team
+description: Wazuh SIEM platform - Manager, Indexer, Dashboard, and Filebeat
+website: https://wazuh.com
+repository: https://github.com/rsdenck/lxchub/tree/main/wazuh
+supported_os:
+  - debian-12
+memory_minimum: 4096
+cpu_minimum: 2
+disk_minimum: 30
+services:
+  - wazuh-manager
+  - filebeat
+  - wazuh-indexer
+  - wazuh-dashboard
+ports:
+  - 55000/tcp
+  - 9200/tcp
+  - 443/tcp
+  - 1514/tcp
+  - 1515/tcp
+  - 1516/tcp
+healthchecks:
+  - HTTPS dashboard
+  - Wazuh API
+  - Indexer health
+  - Manager service
+tags:
+  - siem
+  - security
+  - wazuh
+  - xdr
+  - compliance
