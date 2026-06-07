@@ -47,25 +47,34 @@ command -v pveam &>/dev/null || die "pveam not found"
 LOG="/tmp/hazuh-deploy.log"
 : > "$LOG"
 
-# ── Build PMTUI on PVE host (silent) ──
-PMTUI_BIN="/tmp/pmtui"
-build_pmtui() {
+# ── Download PMTUI wizard binary ──
+PMTUI_BIN="/tmp/pmtui-wizard"
+PMTUI_URL="https://raw.githubusercontent.com/rsdenck/pmstore/main/bin/pmtui-wizard"
+
+download_pmtui_wizard() {
   if [ -x "$PMTUI_BIN" ]; then
-    msg_ok "PMTUI binary already built"
+    msg_ok "PMTUI wizard already downloaded"
     return 0
   fi
-  msg_info "Building PMTUI binary..."
-  if ! command -v go &>/dev/null; then
-    msg_info "Installing Go on PVE host..."
-    apt-get install -y golang-go &>> "$LOG" || die "Cannot install Go"
-    msg_ok "Go installed"
+  # Check adjacent paths (when running from cloned repo)
+  local SCRIPT_DIR
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+  if [ -x "${SCRIPT_DIR}/../bin/pmtui-wizard" ]; then
+    cp "${SCRIPT_DIR}/../bin/pmtui-wizard" "$PMTUI_BIN"
+    chmod 755 "$PMTUI_BIN"
+    msg_ok "PMTUI wizard found locally"
+    return 0
   fi
-  local TMPDIR="/tmp/pmo-build-$$"
-  git clone --depth 1 https://github.com/rsdenck/pmo.git "$TMPDIR" &>> "$LOG" || die "git clone failed"
-  CGO_ENABLED=0 go build -o "$PMTUI_BIN" -ldflags="-s -w" "${TMPDIR}/pmtui/" &>> "$LOG" || die "PMTUI build failed"
-  rm -rf "$TMPDIR"
-  [ -x "$PMTUI_BIN" ] || die "PMTUI binary not found after build"
-  msg_ok "PMTUI binary built ($(stat -c%s "$PMTUI_BIN") bytes)"
+  if [ -x "${SCRIPT_DIR}/bin/pmtui-wizard" ]; then
+    cp "${SCRIPT_DIR}/bin/pmtui-wizard" "$PMTUI_BIN"
+    chmod 755 "$PMTUI_BIN"
+    msg_ok "PMTUI wizard found locally"
+    return 0
+  fi
+  msg_info "Downloading PMTUI wizard..."
+  curl -fsSL "$PMTUI_URL" -o "$PMTUI_BIN" || die "Failed to download PMTUI wizard"
+  chmod 755 "$PMTUI_BIN"
+  msg_ok "PMTUI wizard downloaded ($(stat -c%s "$PMTUI_BIN") bytes)"
 }
 
 # ── Interactive deploy wizard ──
@@ -111,7 +120,7 @@ var_ram=${var_ram:-4096}
 var_disk=${var_disk:-16}
 
 # ── Interactive or headless ──
-build_pmtui
+download_pmtui_wizard
 
 if [ -t 0 ] && [ -z "${IP:-}" ] && [ -z "${target_ip:-}" ]; then
   run_deploy_wizard
