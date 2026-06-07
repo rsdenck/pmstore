@@ -35,6 +35,11 @@ regra.md
 ssh.md
 lxc.md
 
+# Context / planning files — not versioned
+lxchub.md
+hazuh.md
+wizard.md
+
 # Stale / internal-only files
 ttl.sh
 wazuh-certs.tar.gz
