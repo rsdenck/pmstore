@@ -34,5 +34,14 @@ session.md
 regra.md
 ssh.md
 lxc.md
-wazuh/WAZUH.md
-*.log
+
+# Stale / internal-only files
+ttl.sh
+wazuh-certs.tar.gz
+wazuh/
+lxchub-bootstrap.sh
+lxc.md
+
+# Binary / build artifacts
+*.tar.gz
+*.zip
