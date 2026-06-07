@@ -81,12 +81,16 @@ pct exec "$CTID" -- sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' /etc/ss
 pct exec "$CTID" -- sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
 pct exec "$CTID" -- systemctl enable sshd --now
 
-# PMTUI
+# PMTUI - Go binary from rsdenck/pmo
 pct exec "$CTID" -- mkdir -p /opt/lxchub/templates/hazuh /etc/lxchub /var/log/lxchub
-pct exec "$CTID" -- curl -fsSL -o /usr/local/bin/pmtui "https://raw.githubusercontent.com/rsdenck/pmstore/main/ct/pmtui/init.sh" 2>/dev/null || true
-pct exec "$CTID" -- chmod +x /usr/local/bin/pmtui 2>/dev/null || true
-pct exec "$CTID" -- bash -c 'echo "/usr/local/bin/pmtui" >> /etc/shells' 2>/dev/null || true
-pct exec "$CTID" -- usermod -s /usr/local/bin/pmtui root 2>/dev/null || true
+pct exec "$CTID" -- dnf install -y golang git 2>&1 | tail -1
+pct exec "$CTID" -- git clone --depth 1 https://github.com/rsdenck/pmo.git /tmp/pmo 2>&1 | tail -1
+pct exec "$CTID" -- CGO_ENABLED=0 go build -o /usr/local/bin/pmtui -ldflags="-s -w" /tmp/pmo/pmtui/
+pct exec "$CTID" -- rm -rf /tmp/pmo
+pct exec "$CTID" -- chmod +x /usr/local/bin/pmtui
+pct exec "$CTID" -- dnf remove -y golang git 2>&1 | tail -1
+pct exec "$CTID" -- bash -c 'echo "/usr/local/bin/pmtui" >> /etc/shells'
+pct exec "$CTID" -- usermod -s /usr/local/bin/pmtui root
 
 # Metadata
 pct exec "$CTID" -- bash -c "cat > /etc/lxchub/metadata.json << 'EOF'
