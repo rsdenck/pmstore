@@ -28,3 +28,11 @@ tmp/
 # Git
 *.orig
 *.bak
+
+# Sensitive files - not for public repo
+session.md
+regra.md
+ssh.md
+lxc.md
+wazuh/WAZUH.md
+*.log
