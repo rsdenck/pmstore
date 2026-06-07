@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # PMStore - HAZUH (Wazuh SOC Appliance)
-# Usage: var_cpu="2" var_ram="4096" var_disk="16" bash -c "$(curl -fsSL https://raw.githubusercontent.com/rsdenck/pmstore/main/ct/hazuh.sh)"
+# Usage:
+#   Interactive: bash hazuh.sh
+#   Headless:    var_cpu="2" var_ram="4096" var_disk="16" IP="10.0.0.1/24" bash hazuh.sh
 
 PMSTACK="\e[96mPMSTACK\e[39m"
 RSDENCK="\e[92mrsdenck\e[39m"
@@ -40,38 +42,115 @@ cleanup_ctid() {
 command -v pct &>/dev/null || die "pct not found"
 command -v pveam &>/dev/null || die "pveam not found"
 
+# ── Build PMTUI on PVE host if needed ──
+build_pmtui() {
+  local BIN="${1:-/tmp/pmtui}"
+  if [ -x "$BIN" ]; then return 0; fi
+  if ! command -v go &>/dev/null; then
+    echo "  Installing Go..."
+    apt-get install -y golang-go 2>/dev/null || dnf install -y golang 2>/dev/null || die "Cannot install Go"
+  fi
+  local TMPDIR="/tmp/pmo-build-$$"
+  git clone --depth 1 https://github.com/rsdenck/pmo.git "$TMPDIR" 2>&1 | tail -1
+  CGO_ENABLED=0 go build -o "$BIN" -ldflags="-s -w" "${TMPDIR}/pmtui/" 2>&1
+  rm -rf "$TMPDIR"
+  [ -x "$BIN" ] || die "PMTUI build failed"
+}
+
+# ── Interactive deploy wizard via PMTUI ──
+run_deploy_wizard() {
+  header_info
+  echo -e "  Starting PMTUI Deploy Wizard..."
+  echo ""
+  local PMTUI_BIN="/tmp/pmtui-deploy-$$"
+  build_pmtui "$PMTUI_BIN"
+  # Run wizard and capture JSON output
+  local CONFIG_JSON
+  CONFIG_JSON=$("$PMTUI_BIN" --deploy 2>/dev/null)
+  rm -f "$PMTUI_BIN"
+  if [ -z "$CONFIG_JSON" ]; then
+    echo "  Wizard cancelled. Exiting."
+    exit 0
+  fi
+  echo "$CONFIG_JSON"
+
+  # Parse JSON output
+  local IP_MODE HOSTNAME DNS_VAL SSH_ENABLED SSH_PORT IP_ADDR NETMASK GW
+  IP_MODE=$(echo "$CONFIG_JSON" | grep '"ip_mode"' | cut -d'"' -f4)
+  HOSTNAME=$(echo "$CONFIG_JSON" | grep '"hostname"' | cut -d'"' -f4)
+  DNS_VAL=$(echo "$CONFIG_JSON" | grep '"dns"' | cut -d'"' -f4)
+  SSH_ENABLED=$(echo "$CONFIG_JSON" | grep '"ssh_enabled"' | cut -d: -f2 | tr -d ' ,')
+  SSH_PORT=$(echo "$CONFIG_JSON" | grep '"ssh_port"' | cut -d'"' -f4)
+
+  if [ "$IP_MODE" = "static" ]; then
+    IP_ADDR=$(echo "$CONFIG_JSON" | grep '"ip"' | head -1 | cut -d'"' -f4)
+    NETMASK=$(echo "$CONFIG_JSON" | grep '"netmask"' | cut -d'"' -f4)
+    GW=$(echo "$CONFIG_JSON" | grep '"gateway"' | cut -d'"' -f4)
+  else
+    IP_ADDR="dhcp"
+    NETMASK=""
+    GW=""
+  fi
+
+  # Set vars for container creation
+  var_ip="${IP_ADDR}${NETMASK:+/$NETMASK}"
+  var_gw="${GW}"
+  var_dns="${DNS_VAL:-8.8.8.8}"
+  var_hostname="${HOSTNAME:-HAZUH}"
+  var_ssh="${SSH_ENABLED:-true}"
+  var_ssh_port="${SSH_PORT:-22}"
+}
+
+# ── Defaults (used for headless mode) ──
 CTID=${CTID:-$(pvesh get /cluster/nextid 2>/dev/null)}
 var_cpu=${var_cpu:-2}
 var_ram=${var_ram:-4096}
 var_disk=${var_disk:-16}
-IP=${IP:-"192.168.130.10/24"}
-GW=${GW:-"192.168.130.1"}
-DNS=${DNS:-"8.8.8.8"}
+
+# Detect interactive mode: prompt via PMTUI wizard when no IP is pre-set
+if [ -t 0 ] && [ -z "${IP:-}" ] && [ -z "${target_ip:-}" ]; then
+  run_deploy_wizard
+else
+  var_ip="${IP:-192.168.130.10/24}"
+  var_gw="${GW:-192.168.130.1}"
+  var_dns="${DNS:-8.8.8.8}"
+  var_hostname="${HOSTNAME:-HAZUH}"
+  var_ssh="${SSH_ENABLED:-true}"
+  var_ssh_port="${SSH_PORT:-22}"
+fi
 
 header_info
 echo -e "Deploying HAZUH CT $CTID..."
 echo -e "CPU: $var_cpu | RAM: ${var_ram}MB | Disk: ${var_disk}GB"
-echo -e "IP: $IP | GW: $GW"
+echo -e "IP: $var_ip | GW: ${var_gw:-dhcp} | DNS: $var_dns"
+echo -e "SSH: $var_ssh (port $var_ssh_port)"
 echo ""
 
 [[ -f "/etc/pve/lxc/${CTID}.conf" ]] && die "CT $CTID already exists"
 
 TEMPLATE="local:vztmpl/rockylinux-9-default_20240912_amd64.tar.xz"
 
+# Build net0 argument
+if [ "$var_ip" = "dhcp" ]; then
+  NET_ARGS="name=eth0,bridge=vmbr0,type=veth"
+else
+  NET_ARGS="name=eth0,bridge=vmbr0,gw=${var_gw},ip=${var_ip},type=veth"
+fi
+
 # Create container
 pct create "$CTID" "$TEMPLATE" \
-  --hostname "HAZUH" \
+  --hostname "${var_hostname}" \
   --rootfs "lxc-storage:${var_disk}" \
   --memory "$var_ram" \
   --cores "$var_cpu" \
   --unprivileged 1 \
   --features "keyctl=1,nesting=1" \
-  --nameserver "$DNS" \
+  --nameserver "$var_dns" \
   --onboot 1 \
   --start 1 \
   --password "lxchub" \
   --tags "pmstack;rsdenck" \
-  --net0 "name=eth0,bridge=vmbr0,gw=${GW},ip=${IP}"
+  --net0 "$NET_ARGS"
 
 sleep 5
 
@@ -79,9 +158,17 @@ sleep 5
 pct exec "$CTID" -- dnf install -y openssh-server 2>&1 | tail -1
 pct exec "$CTID" -- sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
 pct exec "$CTID" -- sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
-pct exec "$CTID" -- systemctl enable sshd --now
+# Apply SSH port from wizard
+if [ "${var_ssh_port:-22}" != "22" ]; then
+  pct exec "$CTID" -- sed -i "s/^#*\\s*Port\\s\\+[0-9]\\+/Port ${var_ssh_port}/" /etc/ssh/sshd_config
+fi
+if [ "${var_ssh}" = "false" ]; then
+  pct exec "$CTID" -- systemctl disable sshd --now 2>/dev/null || true
+else
+  pct exec "$CTID" -- systemctl enable sshd --now
+fi
 
-# PMTUI - Go binary from rsdenck/pmo
+# PMTUI - Go binary from rsdenck/pmo (build inside container)
 pct exec "$CTID" -- mkdir -p /opt/lxchub/templates/hazuh /etc/lxchub /var/log/lxchub
 pct exec "$CTID" -- dnf install -y golang git 2>&1 | tail -1
 pct exec "$CTID" -- git clone --depth 1 https://github.com/rsdenck/pmo.git /tmp/pmo 2>&1 | tail -1
@@ -136,8 +223,9 @@ echo -e "  $PMSTACK CONSOLE"
 echo -e "  $RSDENCK"
 echo -e "========================================"
 echo -e "  HAZUH CT $CTID deployed!"
-echo -e "  IP: ${IP%/*}"
-echo -e "  SSH: ssh root@${IP%/*} (pass: lxchub)"
+echo -e "  Hostname: ${var_hostname}"
+echo -e "  IP: ${var_ip%/*}"
+echo -e "  SSH: ssh root@${var_ip%/*} (pass: lxchub) port ${var_ssh_port}"
 echo -e "  PMTUI on console/SSH"
 echo -e "  Run install script to deploy Wazuh"
 echo -e "========================================"
