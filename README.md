@@ -1,94 +1,40 @@
-# LXCHub
+# PMStore - Container & VM Templates
 
-Official LXC template repository for the PMO ecosystem.
+Official template repository for **PMStack** ecosystem.
 
-Production-ready container templates for Proxmox Virtual Environment (PVE).
+Documentation: https://pmoflow.pro/
 
-## Architecture
+## Directory Structure
 
-Each template is an **Appliance** containing:
-- Installation logic
-- Validation logic
-- Upgrade logic
-- PMTUI integration
-- Health checks
-- Documentation
+```
+pmstore/
+  ct/          # LXC container templates
+    wazuh/     # Wazuh appliance (indexer, manager, dashboard)
+    pmtui/     # PMTUI management interface
+  vm/          # VM templates (future)
+```
 
-**PMTUI** is the default management interface at kernel level (`lxc.init.cmd`).
-On first boot, PMTUI runs a setup wizard for network, SSH, and appliance install.
+## PMStack
 
-## Available Templates
-
-| Appliance | Status |
-|-----------|--------|
-| Wazuh | Active |
-| Zabbix | Planned |
-| Vault | Planned |
-| Proxmox Backup Client | Planned |
-| Netbox | Planned |
-| Grafana | Planned |
-| Prometheus | Planned |
-| Loki | Planned |
-| Uptime Kuma | Planned |
-| Guacamole | Planned |
-| Authentik | Planned |
-| OpenObserve | Planned |
+PMStack is a Proxmox-based infrastructure stack providing production-ready appliances with PMTUI as the default management interface.
 
 ## Requirements
 
 - Proxmox VE 8.x
-- Debian 12 (preferred) or Ubuntu 24.04
+- Rocky Linux 9 (containers)
 
-## Usage
+## Containers
 
-### Deploy a container
+| CT  | Hostname | IP             | Appliance     |
+|-----|----------|----------------|---------------|
+| 110 | HAZUH    | 192.168.130.10 | Wazuh All-in-One |
 
-```bash
-# Interactive mode
-sudo ./lxchub-bootstrap.sh
+## Management
 
-# Non-interactive with DHCP
-sudo ./lxchub-bootstrap.sh --id 200 --hostname wazuh-ct --appliance wazuh --dhcp
+All containers use **PMTUI** as the default shell (console + SSH).
 
-# Non-interactive with static IP
-sudo ./lxchub-bootstrap.sh --id 201 --hostname zabbix --appliance zabbix --ip 10.0.0.50/24 --gw 10.0.0.1
-```
-
-### Default resources per container
-
-| Resource | Default |
-|----------|---------|
-| Disk     | 8 GB    |
-| RAM      | 2 GB    |
-| vCPU     | 1 core  |
-
-### First boot
-
-PMTUI starts automatically and runs the setup wizard:
-
-1. Network configuration (DHCP or static IP)
-2. Hostname
-3. SSH access (root login, public key)
-4. Appliance installation
-
-All parameters can be pre-configured via CLI flags for fully automated deployment.
-
-### Management
-
-Inside the container, run:
+## Deploy
 
 ```bash
-pmtui
+var_cpu="2" var_ram="4096" var_disk="16" bash -c "$(curl -fsSL https://raw.githubusercontent.com/rsdenck/pmstore/main/proxmox-ve.sh)"
 ```
-
-This opens the management menu:
-- Service Status
-- Restart Services
-- Validate Installation
-- Health Check
-- Update Appliance
-- View Logs
-
-## License
-
-Proprietary — PMO Ecosystem

@@ -12,7 +12,8 @@ set -Eeuo pipefail
 #   Shows interactive management menu
 # ======================================================================
 
-LXCHUB_DIR="/opt/lxchub"
+PMSTORE_DIR="/opt/lxchub"
+APP_DIR="${PMSTORE_DIR}/ct"
 SETUP_LOG="/var/log/lxchub/setup.log"
 SETUP_CONF="/etc/lxchub/setup.conf"
 METADATA_FILE="/etc/lxchub/metadata.json"
@@ -149,10 +150,10 @@ NETCFG
     log "SSH key added"
   fi
 
-  if [[ -z "$APPLIANCE" || ! -d "${LXCHUB_DIR}/templates/${APPLIANCE}" ]]; then
+  if [[ -z "$APPLIANCE" || ! -d "${APP_DIR}/${APPLIANCE}" ]]; then
     echo ""
     echo "--- Appliance ---"
-    for d in "${LXCHUB_DIR}/templates/"*/; do
+    for d in "${APP_DIR}/"*/; do
       echo "  $(basename "$d")"
     done
     echo ""
@@ -183,7 +184,7 @@ EOF
 run_install() {
   local APPLIANCE
   APPLIANCE=$(detect_appliance)
-  local INSTALL_SCRIPT="${LXCHUB_DIR}/templates/${APPLIANCE}/install.sh"
+  local INSTALL_SCRIPT="${APP_DIR}/${APPLIANCE}/install.sh"
 
   if [[ -f "$INSTALL_SCRIPT" ]]; then
     echo "Installing ${APPLIANCE}..."
@@ -229,8 +230,8 @@ pmtui_menu() {
         echo "--- Application Info ---"
         cat "$METADATA_FILE" 2>/dev/null || echo "No metadata"
         echo ""
-        echo "Installed scripts in ${LXCHUB_DIR}/templates/$(detect_appliance)/"
-        ls -la "${LXCHUB_DIR}/templates/$(detect_appliance)/" 2>/dev/null || echo "(empty)"
+        echo "Installed scripts in ${APP_DIR}/$(detect_appliance)/"
+        ls -la "${APP_DIR}/$(detect_appliance)/" 2>/dev/null || echo "(empty)"
         ;;
       2)
         echo ""
@@ -247,15 +248,15 @@ pmtui_menu() {
         echo "Done."
         ;;
       4)
-        local VALIDATE_SCRIPT="${LXCHUB_DIR}/templates/$(detect_appliance)/validate.sh"
+        local VALIDATE_SCRIPT="${APP_DIR}/$(detect_appliance)/validate.sh"
         if [[ -f "$VALIDATE_SCRIPT" ]]; then bash "$VALIDATE_SCRIPT"; else echo "No validate.sh"; fi
         ;;
       5)
-        local HEALTH_SCRIPT="${LXCHUB_DIR}/templates/$(detect_appliance)/healthcheck.sh"
+        local HEALTH_SCRIPT="${APP_DIR}/$(detect_appliance)/healthcheck.sh"
         if [[ -f "$HEALTH_SCRIPT" ]]; then bash "$HEALTH_SCRIPT"; else echo "No healthcheck.sh"; fi
         ;;
       6)
-        local UPDATE_SCRIPT="${LXCHUB_DIR}/templates/$(detect_appliance)/update.sh"
+        local UPDATE_SCRIPT="${APP_DIR}/$(detect_appliance)/update.sh"
         if [[ -f "$UPDATE_SCRIPT" ]]; then bash "$UPDATE_SCRIPT"; else echo "No update.sh"; fi
         ;;
       7)
@@ -293,7 +294,7 @@ pmtui_menu() {
 create_install_service() {
   local APPLIANCE
   APPLIANCE=$(detect_appliance)
-  local INSTALL_SCRIPT="${LXCHUB_DIR}/templates/${APPLIANCE}/install.sh"
+  local INSTALL_SCRIPT="${APP_DIR}/${APPLIANCE}/install.sh"
 
   cat >/etc/systemd/system/lxchub-install.service <<UNIT
 [Unit]

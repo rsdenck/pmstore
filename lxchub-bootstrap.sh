@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 LXCHUB_DIR="/opt/lxchub"
 TEMPLATE_STORAGE="local"
+ROOTFS_STORAGE="local-lvm"
 VMID=""
 HOSTNAME=""
 IP=""
@@ -167,11 +168,10 @@ fi
 log "Creating container ${VMID}..."
 pct create "$VMID" "${TEMPLATE_PATH}" \
   --hostname "$HOSTNAME" \
-  --rootfs "${TEMPLATE_STORAGE}:${DISK_GB}" \
+  --rootfs "${ROOTFS_STORAGE}:${DISK_GB}" \
   --memory "$MEMORY_MB" \
   --cores "$CORES" \
   --unprivileged 1 \
-  --nesting 1 \
   --features "keyctl=1,nesting=1" \
   --nameserver "$DNS" \
   --onboot 1 \
@@ -179,6 +179,11 @@ pct create "$VMID" "${TEMPLATE_PATH}" \
   --password "lxchub" \
   "${NET_ARGS[@]}"
 log "Container ${VMID} created"
+
+# Start container temporarily to copy files
+log "Starting container ${VMID} for setup..."
+pct start "$VMID"
+sleep 3
 
 # Inline SSH key from --ssh-pubkey
 if [[ -n "$SSH_PUBKEY" ]]; then
@@ -253,8 +258,10 @@ else
   log "WARNING: ${CT_CONF} not found"
 fi
 
-# Start
-log "Starting container ${VMID}..."
+# Restart to apply lxc.init.cmd (pmtui-init.sh becomes PID 1)
+log "Restarting container ${VMID} with PMTUI init..."
+pct shutdown "$VMID" --timeout 10 2>/dev/null || pct stop "$VMID" 2>/dev/null || true
+sleep 2
 pct start "$VMID"
 
 echo ""

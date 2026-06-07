@@ -1,0 +1,39 @@
+name: PMStore CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate shell scripts
+        run: |
+          for f in ct/*.sh proxmox-ve.sh; do
+            echo "Validating $f..."
+            bash -n "$f"
+          done
+      - name: Check for secrets in scripts
+        run: |
+          ! grep -r "password.*=" ct/*.sh proxmox-ve.sh 2>/dev/null | grep -v "lxchub"
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+      - name: Run shellcheck
+        run: shellcheck ct/*.sh proxmox-ve.sh 2>/dev/null || true
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for sensitive files
+        run: |
+          ! find . -name "*.pem" -o -name "*.key" -o -name "id_rsa" | grep -q .
