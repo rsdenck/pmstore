@@ -20,7 +20,12 @@ fi
 # ── Appliance definition (exported for PMTUI) ──
 export APPLIANCE="hazuh"
 export TAGS="pmstack;rsdenck"
-export TEMPLATE="${TEMPLATE:-local:vztmpl/rocky9_hazuh_amd64.tar.xz}"
+# Use custom pre-baked template if available, else base Rocky 9
+if [ -f "/var/lib/vz/template/cache/rocky9_hazuh_amd64.tar.xz" ]; then
+  export TEMPLATE="${TEMPLATE:-local:vztmpl/rocky9_hazuh_amd64.tar.xz}"
+else
+  export TEMPLATE="${TEMPLATE:-local:vztmpl/rockylinux-9-default_20240912_amd64.tar.xz}"
+fi
 export STORAGE="${STORAGE:-local-lvm}"
 export BRIDGE="${BRIDGE:-vmbr0}"
 
