@@ -56,7 +56,7 @@ check_pct
 download_pmtui_wizard
 
 if [ "$HEADLESS" = 1 ]; then
-  "$PMTUI_BIN" --deploy --headless
+  "$PMTUI_BIN" --deploy --text
 else
   "$PMTUI_BIN" --deploy
 fi
