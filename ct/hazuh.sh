@@ -20,6 +20,9 @@ fi
 # ── Appliance definition (exported for PMTUI) ──
 export APPLIANCE="hazuh"
 export TAGS="pmstack;rsdenck"
+# Release download URL (GitHub Releases)
+RELEASE_URL="https://github.com/rsdenck/pmstore/releases/download/pre-baked-templates/rocky9_hazuh_amd64.tar.xz"
+
 # Use custom pre-baked template if available, else base Rocky 9
 if [ -f "/var/lib/vz/template/cache/rocky9_hazuh_amd64.tar.xz" ]; then
   export TEMPLATE="${TEMPLATE:-local:vztmpl/rocky9_hazuh_amd64.tar.xz}"
@@ -27,7 +30,14 @@ elif [ -f "/opt/lxchub/templates/hazuh/rocky9_hazuh_amd64.tar.xz" ]; then
   cp -n "/opt/lxchub/templates/hazuh/rocky9_hazuh_amd64.tar.xz" /var/lib/vz/template/cache/ 2>/dev/null || true
   export TEMPLATE="${TEMPLATE:-local:vztmpl/rocky9_hazuh_amd64.tar.xz}"
 else
-  export TEMPLATE="${TEMPLATE:-local:vztmpl/rockylinux-9-default_20240912_amd64.tar.xz}"
+  msg_info "Pre-baked template not found locally. Downloading from GitHub Releases..."
+  if curl -fsSL "$RELEASE_URL" -o /var/lib/vz/template/cache/rocky9_hazuh_amd64.tar.xz 2>/dev/null; then
+    msg_ok "Pre-baked template downloaded (rocky9_hazuh_amd64.tar.xz)"
+    export TEMPLATE="${TEMPLATE:-local:vztmpl/rocky9_hazuh_amd64.tar.xz}"
+  else
+    msg_warn "Download failed. Falling back to base Rocky 9 template."
+    export TEMPLATE="${TEMPLATE:-local:vztmpl/rockylinux-9-default_20240912_amd64.tar.xz}"
+  fi
 fi
 export STORAGE="${STORAGE:-local-lvm}"
 export BRIDGE="${BRIDGE:-vmbr0}"
