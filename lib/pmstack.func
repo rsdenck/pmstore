@@ -95,6 +95,14 @@ build_container() {
   msg_ok "CT ${CTID} created and started"
 }
 
+# ── install_build_deps — common build tools in container ──
+install_build_deps() {
+  local ctid="${1:-$CTID}"
+  msg_info "Installing build dependencies..."
+  exec_lxc "$ctid" bash -c 'dnf install -y -q tar gzip curl 2>/dev/null'
+  msg_ok "Build dependencies installed"
+}
+
 # ── install_pmtui — install PMTUI wizard in container ──
 install_pmtui() {
   local ctid="${1:-$CTID}"
