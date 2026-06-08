@@ -168,13 +168,16 @@ finish() {
 
   msg_info "Exporting template (${export_name})..."
   pct mount "$ctid" &>>"${LOG:-/dev/null}"
-  cd "/var/lib/lxc/${ctid}/rootfs"
+  pushd "/var/lib/lxc/${ctid}/rootfs" >/dev/null
   tar -cf - --xattrs --acls . 2>/dev/null | xz -1 -T4 > "${export_dir}/${export_name}" 2>/dev/null
-  pct unmount "$ctid" &>>"${LOG:-/dev/null}" || true
+  popd >/dev/null
+  sleep 1
+  pct unmount "$ctid" &>>"${LOG:-/dev/null}" || umount -l "/var/lib/lxc/${ctid}/rootfs" 2>/dev/null || true
 
   msg_ok "Template exported: ${export_dir}/${export_name}"
 
   msg_info "Cleaning up build CT..."
+  pct unlock "$ctid" &>>"${LOG:-/dev/null}" || true
   pct destroy "$ctid" &>>"${LOG:-/dev/null}" || true
 
   msg_ok "${APP} template build complete!"
