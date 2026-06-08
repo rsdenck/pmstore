@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# PMStack Template Builder — shared functions for pre-baked appliance templates
+# Source: https://raw.githubusercontent.com/rsdenck/pmstore/main/lib/pmstack.func
+
+set -Eeuo pipefail
+
+# ── Appliance metadata (set by sourcing script) ──
+: "${APP:=Appliance}"
+: "${APP_CATEGORY:=General}"
+: "${APP_OS:=Rocky}"
+: "${APP_VERSION:=9}"
+: "${var_cpu:=2}"
+: "${var_ram:=4096}"
+: "${var_disk:=20}"
+: "${TAGS:=pmstack;rsdenck}"
+: "${VM_BRIDGE:=vmbr0}"
+: "${VM_STORAGE:=local-lvm}"
+
+# ── Colors ──
+C_RESET="\e[0m"; C_BOLD="\e[1m"
+C_GREEN="\e[38;2;0;220;120m"
+C_YELLOW="\e[38;2;255;200;0m"
+C_RED="\e[38;2;255;70;70m"
+C_BLUE="\e[38;2;70;130;255m"
+C_CYAN="\e[38;2;0;200;255m"
+C_WHITE="\e[38;2;255;255;255m"; C_GRAY="\e[38;2;160;160;160m"
+C_ORANGE="\e[38;2;255;90;0m"
+
+# ── Messaging ──
+msg_info()  { echo -e "  ${C_BLUE}[*]${C_RESET} $1"; }
+msg_ok()    { echo -e "  ${C_GREEN}[+]${C_RESET} $1"; }
+msg_warn()  { echo -e "  ${C_YELLOW}[!]${C_RESET} $1"; }
+msg_error() { echo -e "  ${C_RED}[-]${C_RESET} $1" >&2; }
+die()       { msg_error "$1"; exit 1; }
+
+# ── PVE Helpers ──
+next_ctid() { pvesh get /cluster/nextid 2>/dev/null || die "Cannot get next CT ID"; }
+ct_exists() { [[ -f "/etc/pve/lxc/${1}.conf" ]]; }
+exec_lxc()  { local c=$1; shift; pct exec "$c" -- "$@" &>>"${LOG:-/dev/null}"; }
+push_lxc()  { local c=$1 s=$2 d=$3; pct push "$c" "$s" "$d" &>>"${LOG:-/dev/null}"; }
+
+# ── start — header + validation ──
+start() {
+  clear
+  echo -e "========================================"
+  echo -e "  ${C_BOLD}${C_CYAN}PMSTACK CONSOLE${C_RESET}"
+  echo -e "  ${C_GREEN}rsdenck${C_RESET}"
+  echo -e "========================================"
+  echo -e "  ${C_BOLD}${C_WHITE}${APP}${C_RESET} ${C_GRAY}v${APP_VERSION:-}${C_RESET}"
+  echo -e "  ${C_GRAY}${APP_OS} ${APP_VERSION} - Template Builder${C_RESET}"
+  echo -e "========================================"
+  echo ""
+  [[ $EUID -eq 0 ]] || die "Must run as root"
+  command -v pct &>/dev/null || die "pct not found"
+  LOG="/var/log/pmstack-$(echo "$APP" | tr '[:upper:]' '[:lower:]')-build.log"
+  : > "$LOG"
+  msg_info "Building ${APP} template..."
+}
+
+# ── build_container — create LXC ──
+build_container() {
+  local os="${APP_OS,,}"
+  local ver="${APP_VERSION}"
+
+  if [ "$os" = "rocky" ]; then
+    TEMPLATE="local:vztmpl/rockylinux-${ver}-default_20240912_amd64.tar.xz"
+    OSTYPE="centos"
+  elif [ "$os" = "ubuntu" ]; then
+    TEMPLATE="local:vztmpl/ubuntu-${ver}-standard_${ver}.0-1_amd64.tar.zst"
+    OSTYPE="ubuntu"
+  elif [ "$os" = "debian" ]; then
+    TEMPLATE="local:vztmpl/debian-${ver}-standard_${ver}.12-1_amd64.tar.zst"
+    OSTYPE="debian"
+  else
+    die "Unsupported OS: $os"
+  fi
+
+  CTID="${CTID:-$(next_ctid)}"
+  local disk="${var_disk}G"
+
+  msg_info "Creating CT ${CTID} (${APP}, ${var_cpu}vcpu/${var_ram}MB/${var_disk}G)..."
+  pct create "$CTID" "$TEMPLATE" \
+    --rootfs "${VM_STORAGE}:${disk}" \
+    --cores "$var_cpu" \
+    --memory "$var_ram" \
+    --hostname "$(echo "$APP" | tr '[:lower:]' '[:upper:]')" \
+    --net0 "name=eth0,bridge=${VM_BRIDGE},ip=dhcp" \
+    --tags "$TAGS" \
+    --ostype "$OSTYPE" \
+    --password pmstore \
+    --features nesting=1 \
+    --unprivileged 0 \
+    --start 1 &>>"/var/log/pmstack-build-${CTID}.log"
+
+  msg_ok "CT ${CTID} created and started"
+}
+
+# ── install_pmtui — install PMTUI wizard in container ──
+install_pmtui() {
+  local ctid="${1:-$CTID}"
+  msg_info "Installing PMTUI wizard..."
+  local binary
+  local dir
+  dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+  if [ -x "${dir}/../bin/pmtui-wizard" ]; then
+    binary="${dir}/../bin/pmtui-wizard"
+  elif [ -x "/opt/lxchub/bin/pmtui-wizard" ]; then
+    binary="/opt/lxchub/bin/pmtui-wizard"
+  else
+    binary="/tmp/pmtui-wizard"
+    curl -fsSL "https://raw.githubusercontent.com/rsdenck/pmstore/main/bin/pmtui-wizard" -o "$binary" || die "Failed to download PMTUI"
+    chmod 755 "$binary"
+  fi
+  push_lxc "$ctid" "$binary" /usr/local/bin/pmtui
+  exec_lxc "$ctid" chmod 755 /usr/local/bin/pmtui
+  exec_lxc "$ctid" bash -c 'echo "/usr/local/bin/pmtui" >> /etc/shells'
+  exec_lxc "$ctid" usermod -s /usr/local/bin/pmtui root
+  msg_ok "PMTUI installed"
+}
+
+# ── soc_harden — SOC hardening inside container ──
+soc_harden() {
+  local ctid="${1:-$CTID}"
+  msg_info "Applying SOC hardening..."
+  exec_lxc "$ctid" bash -c 'cat > /etc/sysctl.d/99-soc-hardening.conf << "EOF"
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.default.rp_filter = 1
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv6.conf.all.accept_redirects = 0
+net.ipv4.conf.all.secure_redirects = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.conf.default.accept_source_route = 0
+net.ipv6.conf.all.accept_source_route = 0
+net.ipv4.tcp_syncookies = 1
+net.ipv4.tcp_syn_retries = 2
+net.ipv4.conf.all.log_martians = 1
+net.ipv4.ip_forward = 0
+net.ipv6.conf.all.forwarding = 0
+net.ipv4.tcp_fin_timeout = 30
+net.ipv4.tcp_keepalive_time = 300
+EOF'
+  exec_lxc "$ctid" sysctl -p /etc/sysctl.d/99-soc-hardening.conf
+  exec_lxc "$ctid" bash -c 'echo "umask 027" >> /etc/profile.d/umask.sh'
+  exec_lxc "$ctid" chmod 644 /etc/profile.d/umask.sh
+  msg_ok "SOC hardening applied"
+}
+
+# ── finish — clean, stop, export template ──
+finish() {
+  local ctid="${1:-$CTID}"
+  local app_lower
+  app_lower="$(echo "$APP" | tr '[:upper:]' '[:lower:]')"
+
+  msg_info "Cleaning up..."
+  exec_lxc "$ctid" dnf clean all 2>/dev/null || true
+  exec_lxc "$ctid" bash -c 'rm -rf /var/cache/dnf/* /tmp/*' 2>/dev/null || true
+  exec_lxc "$ctid" bash -c 'rm -f /root/.bash_history' 2>/dev/null || true
+
+  msg_info "Stopping CT ${ctid}..."
+  pct stop "$ctid" &>>"${LOG:-/dev/null}"
+
+  msg_info "Converting to template..."
+  pct template "$ctid" &>>"${LOG:-/dev/null}"
+
+  local export_dir="/var/lib/vz/template/cache"
+  local export_name="rocky${APP_VERSION}_${app_lower}_amd64.tar.xz"
+
+  msg_info "Exporting template (${export_name})..."
+  pct mount "$ctid" &>>"${LOG:-/dev/null}"
+  cd "/var/lib/lxc/${ctid}/rootfs"
+  tar -cf - --xattrs --acls . 2>/dev/null | xz -1 -T4 > "${export_dir}/${export_name}" 2>/dev/null
+  pct unmount "$ctid" &>>"${LOG:-/dev/null}" || true
+
+  msg_ok "Template exported: ${export_dir}/${export_name}"
+
+  msg_info "Cleaning up build CT..."
+  pct destroy "$ctid" &>>"${LOG:-/dev/null}" || true
+
+  msg_ok "${APP} template build complete!"
+}

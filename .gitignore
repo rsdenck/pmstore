@@ -50,10 +50,11 @@ TEMPLATE-BUILD.md
 # Stale / internal-only files
 ttl.sh
 wazuh-certs.tar.gz
-wazuh/
+/wazuh/
 lxchub-bootstrap.sh
 lxc.md
 
 # Binary / build artifacts
 *.tar.gz
+*.tar.xz
 *.zip

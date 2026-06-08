@@ -23,6 +23,9 @@ export TAGS="pmstack;rsdenck"
 # Use custom pre-baked template if available, else base Rocky 9
 if [ -f "/var/lib/vz/template/cache/rocky9_hazuh_amd64.tar.xz" ]; then
   export TEMPLATE="${TEMPLATE:-local:vztmpl/rocky9_hazuh_amd64.tar.xz}"
+elif [ -f "/opt/lxchub/templates/hazuh/rocky9_hazuh_amd64.tar.xz" ]; then
+  cp -n "/opt/lxchub/templates/hazuh/rocky9_hazuh_amd64.tar.xz" /var/lib/vz/template/cache/ 2>/dev/null || true
+  export TEMPLATE="${TEMPLATE:-local:vztmpl/rocky9_hazuh_amd64.tar.xz}"
 else
   export TEMPLATE="${TEMPLATE:-local:vztmpl/rockylinux-9-default_20240912_amd64.tar.xz}"
 fi
