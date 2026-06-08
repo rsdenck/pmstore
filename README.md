@@ -12,9 +12,9 @@ PMStore is a curated catalog of pre-built Rocky Linux 9 containers purpose-built
 
 | Appliance | Description | Template |
 |-----------|-------------|----------|
-| hazuh     | Wazuh SOC platform (indexer, manager, dashboard) | `template/hazuh/rocky9_hazuh_amd64.tar.xz` |
-| zabbix    | Zabbix monitoring platform | `template/zabbix/rocky9_zabbix_amd64.tar.xz` |
-| corrot    | Coroot observability platform | `template/corrot/rocky9_corrot_amd64.tar.xz` |
+| hazuh     | Wazuh SOC platform (indexer, manager, dashboard) | `templates/hazuh/rocky9_hazuh_amd64.tar.xz` |
+| zabbix    | Zabbix monitoring platform | `templates/zabbix/rocky9_zabbix_amd64.tar.xz` |
+| corrot    | Coroot observability platform | `templates/corrot/rocky9_corrot_amd64.tar.xz` |
 
 ## Quick Deploy
 
@@ -42,7 +42,7 @@ pmstore/
   ct/              # Deploy scripts (appliance wrappers)
   core/            # PMStack framework (modular shell libraries)
   bin/             # Pre-compiled PMTUI wizard binary
-  template/        # Pre-baked appliance templates
+  templates/       # Pre-baked appliance templates
     hazuh/
     zabbix/
     corrot/
