@@ -1,0 +1,12 @@
+{
+  "appliance": "hazuh",
+  "version": "4.14.5",
+  "os": "rockylinux",
+  "os_version": "9",
+  "description": "Wazuh SOC All-in-One",
+  "tags": ["pmstack", "rsdenck"],
+  "services": ["wazuh-", "filebeat"],
+  "ports": [443, 1514, 1515, 1516, 55000],
+  "dependencies": ["wazuh-indexer", "wazuh-manager", "wazuh-dashboard", "filebeat"],
+  "hardening": true
+}

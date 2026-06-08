@@ -1,0 +1,254 @@
+# PMStack Branding — colors, header, logo
+# Source: https://raw.githubusercontent.com/rsdenck/pmstore/main/core/branding.sh
+
+readonly C_ORANGE="\e[38;2;255;90;0m"
+readonly C_ORANGE_DIM="\e[38;2;255;120;40m"
+readonly C_GREEN="\e[38;2;0;220;120m"
+readonly C_YELLOW="\e[38;2;255;200;0m"
+readonly C_RED="\e[38;2;255;70;70m"
+readonly C_BLUE="\e[38;2;70;130;255m"
+readonly C_CYAN="\e[38;2;0;200;255m"
+readonly C_WHITE="\e[38;2;255;255;255m"
+readonly C_GRAY="\e[38;2;160;160;160m"
+readonly C_RESET="\e[0m"
+readonly C_BOLD="\e[1m"
+
+PMSTACK="${C_CYAN}PMSTACK${C_RESET}"
+RSDENCK="${C_GREEN}rsdenck${C_RESET}"
+
+header_info() {
+  clear
+  echo -e "========================================"
+  echo -e "  ${C_BOLD}${C_CYAN}PMSTACK CONSOLE${C_RESET}"
+  echo -e "  ${C_GREEN}rsdenck${C_RESET}"
+  echo -e "========================================"
+}
+
+appliance_header() {
+  local name="${1:-Appliance}"
+  local version="${2:-}"
+  local os="${3:-Rocky Linux 9}"
+  echo -e "  ${C_BOLD}${C_WHITE}${name}${C_RESET}${version:+ ${C_GRAY}v${version}${C_RESET}}"
+  echo -e "  ${C_GRAY}${os} - Hardened${C_RESET}"
+  echo -e "========================================"
+}
+# PMStack Common — messaging, error handling, spinner
+# Source: https://raw.githubusercontent.com/rsdenck/pmstore/main/core/common.sh
+
+msg_info()  { echo -e "  ${C_BLUE}[*]${C_RESET} $1"; }
+msg_ok()    { echo -e "  ${C_GREEN}[+]${C_RESET} $1"; }
+msg_warn()  { echo -e "  ${C_YELLOW}[!]${C_RESET} $1"; }
+msg_error() { echo -e "  ${C_RED}[-]${C_RESET} $1" >&2; }
+
+set -Eeuo pipefail
+
+catch_errors() {
+  trap 'error_handler $? $LINENO' ERR
+  trap 'cleanup_exit $?' EXIT
+}
+
+error_handler() {
+  local exit_code=$1
+  local line=$2
+  msg_error "Failed at line ${line} (exit ${exit_code})"
+  [ ! -z "${CTID:-}" ] && cleanup_ctid
+  exit "$exit_code"
+}
+
+cleanup_exit() {
+  local rc=$?
+  trap - ERR EXIT
+  [ "$rc" -eq 0 ] && return 0
+  [ ! -z "${CTID:-}" ] && cleanup_ctid
+  exit "$rc"
+}
+
+cleanup_ctid() {
+  if pct status "$CTID" &>/dev/null; then
+    pct stop "$CTID" 2>/dev/null || true
+    pct destroy "$CTID" 2>/dev/null || true
+  fi
+}
+
+spinner() {
+  local pid=$1
+  local delay=0.1
+  local spinstr='|/-\'
+  while ps -p "$pid" &>/dev/null; do
+    local temp=${spinstr#?}
+    printf "  [%c]  " "$spinstr"
+    spinstr=$temp${spinstr%"$temp"}
+    sleep $delay
+    printf "\b\b\b\b\b\b"
+  done
+  printf "    \b\b\b\b"
+}
+
+check_root() {
+  [[ $EUID -eq 0 ]] || die "Must run as root"
+}
+
+check_pct() {
+  command -v pct &>/dev/null || die "pct not found (not a PVE host?)"
+}
+# PMStack PVE Helpers — pct operations, template, network
+# Source: https://raw.githubusercontent.com/rsdenck/pmstore/main/core/pve.sh
+
+next_ctid() {
+  pvesh get /cluster/nextid 2>/dev/null || die "Cannot get next CT ID"
+}
+
+ct_exists() {
+  local ctid="$1"
+  [[ -f "/etc/pve/lxc/${ctid}.conf" ]]
+}
+
+create_lxc() {
+  local ctid="$1" template="$2"
+  shift 2
+  pct create "$ctid" "$template" "$@" &>>"${LOG:-/dev/null}" || die "pct create failed"
+}
+
+start_lxc() {
+  local ctid="$1"
+  pct start "$ctid" &>>"${LOG:-/dev/null}" || die "Failed to start CT $ctid"
+}
+
+exec_lxc() {
+  local ctid="$1"
+  shift
+  pct exec "$ctid" -- "$@" &>>"${LOG:-/dev/null}"
+}
+
+push_lxc() {
+  local ctid="$1" src="$2" dst="$3"
+  pct push "$ctid" "$src" "$dst" &>>"${LOG:-/dev/null}"
+}
+
+resize_lxc() {
+  local ctid="$1" disk="$2"
+  pct resize "$ctid" rootfs "${disk}G" &>>"${LOG:-/dev/null}" || true
+}
+
+lxc_systemd() {
+  local ctid="$1" action="$2" unit="$3"
+  exec_lxc "$ctid" systemctl "$action" "$unit"
+}
+# PMStack Network — network configuration helpers
+# Source: https://raw.githubusercontent.com/rsdenck/pmstore/main/core/network.sh
+
+build_net_args() {
+  local ip="$1" gw="$2"
+  if [ "$ip" = "dhcp" ]; then
+    echo "name=eth0,bridge=vmbr0,type=veth"
+  else
+    echo "name=eth0,bridge=vmbr0,gw=${gw},ip=${ip},type=veth"
+  fi
+}
+
+config_ssh() {
+  local ctid="$1" ssh_enabled="$2" ssh_port="${3:-22}"
+  exec_lxc "$ctid" dnf install -y openssh-server
+  exec_lxc "$ctid" sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+  exec_lxc "$ctid" sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+  if [ "$ssh_port" != "22" ]; then
+    exec_lxc "$ctid" sed -i "s/^#*\\s*Port\\s\\+[0-9]\\+/Port ${ssh_port}/" /etc/ssh/sshd_config
+  fi
+  if [ "$ssh_enabled" = "false" ]; then
+    exec_lxc "$ctid" systemctl disable sshd --now || true
+  else
+    exec_lxc "$ctid" systemctl enable sshd --now
+  fi
+}
+# PMStack Security — SOC hardening, sysctl, umask
+# Source: https://raw.githubusercontent.com/rsdenck/pmstore/main/core/security.sh
+
+apply_soc_hardening() {
+  local ctid="$1"
+  exec_lxc "$ctid" bash -c "cat > /etc/sysctl.d/99-soc-hardening.conf << 'SYSCTL'
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.default.rp_filter = 1
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv6.conf.all.accept_redirects = 0
+net.ipv4.conf.all.secure_redirects = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.conf.default.accept_source_route = 0
+net.ipv6.conf.all.accept_source_route = 0
+net.ipv4.tcp_syncookies = 1
+net.ipv4.tcp_syn_retries = 2
+net.ipv4.conf.all.log_martians = 1
+net.ipv4.ip_forward = 0
+net.ipv6.conf.all.forwarding = 0
+net.ipv4.tcp_fin_timeout = 30
+net.ipv4.tcp_keepalive_time = 300
+SYSCTL"
+  exec_lxc "$ctid" sysctl -p /etc/sysctl.d/99-soc-hardening.conf
+  exec_lxc "$ctid" bash -c 'echo "umask 027" >> /etc/profile.d/umask.sh'
+  exec_lxc "$ctid" chmod 644 /etc/profile.d/umask.sh
+}
+# PMStack PMTUI — download wizard, install in container
+# Source: https://raw.githubusercontent.com/rsdenck/pmstore/main/core/pmtui.sh
+
+PMTUI_BIN="/tmp/pmtui-wizard"
+PMTUI_URL="https://raw.githubusercontent.com/rsdenck/pmstore/main/bin/pmtui-wizard"
+
+download_pmtui_wizard() {
+  if [ -x "$PMTUI_BIN" ]; then
+    msg_ok "PMTUI wizard ready"
+    return 0
+  fi
+  # Try adjacent paths (cloned repo)
+  local dir
+  dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+  if [ -x "${dir}/../bin/pmtui-wizard" ]; then
+    cp "${dir}/../bin/pmtui-wizard" "$PMTUI_BIN"
+    chmod 755 "$PMTUI_BIN"
+    msg_ok "PMTUI wizard found locally"
+    return 0
+  fi
+  if [ -x "${dir}/bin/pmtui-wizard" ]; then
+    cp "${dir}/bin/pmtui-wizard" "$PMTUI_BIN"
+    chmod 755 "$PMTUI_BIN"
+    msg_ok "PMTUI wizard found locally"
+    return 0
+  fi
+  msg_info "Downloading PMTUI wizard..."
+  curl -fsSL "$PMTUI_URL" -o "$PMTUI_BIN" || die "Failed to download PMTUI wizard"
+  chmod 755 "$PMTUI_BIN"
+  msg_ok "PMTUI wizard downloaded ($(stat -c%s "$PMTUI_BIN") bytes)"
+}
+
+run_pmtui_deploy() {
+  local config_json
+  config_json=$("$PMTUI_BIN" --deploy 2>/dev/null)
+  if [ -z "$config_json" ]; then
+    echo "  Wizard cancelled."
+    exit 0
+  fi
+  echo "$config_json"
+}
+
+install_pmtui_container() {
+  local ctid="$1"
+  exec_lxc "$ctid" mkdir -p /etc/lxchub /var/log/lxchub
+  push_lxc "$ctid" "$PMTUI_BIN" /usr/local/bin/pmtui
+  exec_lxc "$ctid" chmod 755 /usr/local/bin/pmtui
+  exec_lxc "$ctid" bash -c 'echo "/usr/local/bin/pmtui" >> /etc/shells'
+  exec_lxc "$ctid" usermod -s /usr/local/bin/pmtui root
+}
+
+write_metadata() {
+  local ctid="$1" appliance="$2" disk="$3" memory="$4" cores="$5"
+  exec_lxc "$ctid" bash -c "cat > /etc/lxchub/metadata.json << 'EOF'
+{
+  \"appliance\": \"${appliance}\",
+  \"deployed\": false,
+  \"resources\": {
+    \"disk\": ${disk},
+    \"memory\": ${memory},
+    \"cores\": ${cores}
+  }
+}
+EOF"
+}
