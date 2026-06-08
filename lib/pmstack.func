@@ -76,7 +76,7 @@ build_container() {
   fi
 
   CTID="${CTID:-$(next_ctid)}"
-  local disk="${var_disk}G"
+  local disk="${var_disk}"
 
   msg_info "Creating CT ${CTID} (${APP}, ${var_cpu}vcpu/${var_ram}MB/${var_disk}G)..."
   pct create "$CTID" "$TEMPLATE" \

@@ -57,5 +57,5 @@ lxc.md
 
 # Binary / build artifacts
 *.tar.gz
-*.tar.xz
+
 *.zip
