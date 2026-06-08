@@ -20,7 +20,7 @@ fi
 # ── Appliance definition (exported for PMTUI) ──
 export APPLIANCE="hazuh"
 export TAGS="pmstack;rsdenck"
-export TEMPLATE="${TEMPLATE:-local:vztmpl/rockylinux-9-default_20240912_amd64.tar.xz}"
+export TEMPLATE="${TEMPLATE:-local:vztmpl/rocky9_hazuh_amd64.tar.xz}"
 export STORAGE="${STORAGE:-local-lvm}"
 export BRIDGE="${BRIDGE:-vmbr0}"
 

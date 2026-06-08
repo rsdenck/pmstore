@@ -1,40 +1,89 @@
-# PMStore - Container & VM Templates
+# PMStore
 
-Official template repository for **PMStack** ecosystem.
+[![PMStack](https://cdn.iconscout.com/icon/premium/png-256-thumb/proxmox-logo-icon-svg-download-png-7196884.png?f=webp)](https://pmoflow.pro)
 
-Documentation: https://pmoflow.pro/
+Production-ready LXC appliance templates for Proxmox VE, powered by the PMStack framework.
 
-## Directory Structure
+## Overview
 
+PMStore is a curated catalog of pre-built Rocky Linux 9 containers purpose-built for infrastructure workloads. Each appliance ships with **PMTUI** as the default management shell -- a terminal-based control interface for day-2 operations, monitoring, and configuration.
+
+## Appliances
+
+| Appliance | Description | Template |
+|-----------|-------------|----------|
+| hazuh     | Wazuh SOC platform (indexer, manager, dashboard) | `template/hazuh/rocky9_hazuh_amd64.tar.xz` |
+| zabbix    | Zabbix monitoring platform | `template/zabbix/rocky9_zabbix_amd64.tar.xz` |
+| corrot    | Coroot observability platform | `template/corrot/rocky9_corrot_amd64.tar.xz` |
+
+## Quick Deploy
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/rsdenck/pmstore/main/ct/hazuh.sh)"
 ```
-pmstore/
-  ct/          # LXC container templates
-    wazuh/     # Wazuh appliance (indexer, manager, dashboard)
-    pmtui/     # PMTUI management interface
-  vm/          # VM templates (future)
+
+For headless/automated deployments:
+
+```bash
+export IP="192.168.130.10/24" GW="192.168.130.1" HOSTNAME="HAZUH01"
+export var_cpu=2 var_ram=4096 var_disk=16
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/rsdenck/pmstore/main/ct/hazuh.sh)"
 ```
-
-## PMStack
-
-PMStack is a Proxmox-based infrastructure stack providing production-ready appliances with PMTUI as the default management interface.
 
 ## Requirements
 
 - Proxmox VE 8.x
-- Rocky Linux 9 (containers)
+- Rocky Linux 9 container template (`local:vztmpl/rockylinux-9-default_20240912_amd64.tar.xz`)
 
-## Containers
+## Architecture
 
-| CT  | Hostname | IP             | Appliance     |
-|-----|----------|----------------|---------------|
-| 110 | HAZUH    | 192.168.130.10 | Wazuh All-in-One |
-
-## Management
-
-All containers use **PMTUI** as the default shell (console + SSH).
-
-## Deploy
-
-```bash
-var_cpu="2" var_ram="4096" var_disk="16" bash -c "$(curl -fsSL https://raw.githubusercontent.com/rsdenck/pmstore/main/proxmox-ve.sh)"
 ```
+pmstore/
+  ct/              # Deploy scripts (appliance wrappers)
+  core/            # PMStack framework (modular shell libraries)
+  bin/             # Pre-compiled PMTUI wizard binary
+  template/        # Pre-baked appliance templates
+    hazuh/
+    zabbix/
+    corrot/
+  assets/          # Branding and static resources
+```
+
+## PMTUI Management Console
+
+All appliances use PMTUI as the system shell. When you SSH into a container or open its console, PMTUI starts automatically, providing:
+
+- System resource monitoring (CPU, RAM, disk, network)
+- Service health dashboard with appliance-aware filtering
+- Network configuration (static IP, DNS, gateway)
+- System logs viewer
+- Security hardening controls
+- SOC-hardened defaults
+
+No bash access is exposed to the user -- all management is done through the PMTUI interface.
+
+## Deploy Wizard
+
+The PMTUI deploy wizard handles the full provisioning lifecycle:
+
+1. Container creation (pct create with resource allocation)
+2. Root password initialization
+3. DNS configuration
+4. SSH setup (configurable port, disable option)
+5. PMTUI installation and shell registration
+6. Metadata writing
+7. SOC hardening (sysctl, kernel parameters)
+8. Network finalization (static IP assignment, hostname, tags)
+
+Supports both interactive TUI mode and headless text mode for automation.
+
+## Security
+
+- Unprivileged containers with keyctl and nesting features
+- SOC-inspired sysctl hardening (syncookies, rp_filter, IPv6 RA/redirect disable)
+- PMTUI-only access model (no direct shell)
+- Static IP enforcement with bridge binding
+
+---
+
+[PMStack Documentation](https://pmoflow.pro) | [GitHub](https://github.com/rsdenck/pmstore)

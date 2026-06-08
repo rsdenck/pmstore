@@ -5,29 +5,17 @@ PMTUI_BIN="/tmp/pmtui-wizard"
 PMTUI_URL="https://raw.githubusercontent.com/rsdenck/pmstore/main/bin/pmtui-wizard"
 
 download_pmtui_wizard() {
-  if [ -x "$PMTUI_BIN" ]; then
-    msg_ok "PMTUI wizard ready"
-    return 0
-  fi
-  # Try adjacent paths (cloned repo)
+  [ -x "$PMTUI_BIN" ] && return 0
   local dir
   dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
   if [ -x "${dir}/../bin/pmtui-wizard" ]; then
-    cp "${dir}/../bin/pmtui-wizard" "$PMTUI_BIN"
-    chmod 755 "$PMTUI_BIN"
-    msg_ok "PMTUI wizard found locally"
-    return 0
+    cp "${dir}/../bin/pmtui-wizard" "$PMTUI_BIN" && chmod 755 "$PMTUI_BIN" && return 0
   fi
   if [ -x "${dir}/bin/pmtui-wizard" ]; then
-    cp "${dir}/bin/pmtui-wizard" "$PMTUI_BIN"
-    chmod 755 "$PMTUI_BIN"
-    msg_ok "PMTUI wizard found locally"
-    return 0
+    cp "${dir}/bin/pmtui-wizard" "$PMTUI_BIN" && chmod 755 "$PMTUI_BIN" && return 0
   fi
-  msg_info "Downloading PMTUI wizard..."
-  curl -fsSL "$PMTUI_URL" -o "$PMTUI_BIN" || die "Failed to download PMTUI wizard"
+  curl -fsSL "$PMTUI_URL" -o "$PMTUI_BIN" 2>/dev/null || die "Failed to download PMTUI wizard"
   chmod 755 "$PMTUI_BIN"
-  msg_ok "PMTUI wizard downloaded ($(stat -c%s "$PMTUI_BIN") bytes)"
 }
 
 run_pmtui_deploy() {
