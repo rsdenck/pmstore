@@ -99,6 +99,10 @@ create_lxc "$CTID" "$TEMPLATE" \
 sleep 5
 msg_ok "Container created"
 
+msg_info "Setting root password..."
+exec_lxc "$CTID" bash -c 'echo "root:lxchub" | chpasswd'
+msg_ok "Root password set"
+
 msg_info "Configuring SSH..."
 config_ssh "$CTID" "$var_ssh" "${var_ssh_port:-22}"
 msg_ok "SSH configured"
