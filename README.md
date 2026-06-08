@@ -2,32 +2,27 @@
 
 [![PMStack](https://cdn.iconscout.com/icon/premium/png-256-thumb/proxmox-logo-icon-svg-download-png-7196884.png?f=webp)](https://pmoflow.pro)
 
-Production-ready LXC appliance templates for Proxmox VE, powered by the PMStack framework.
+LXC container template catalog for Proxmox VE. Browse 117+ templates at [pmoflow.pro/store](https://pmoflow.pro/store).
 
-## Overview
-
-PMStore is a curated catalog of pre-built Rocky Linux 9 containers purpose-built for infrastructure workloads. Each appliance ships with **PMTUI** as the default management shell -- a terminal-based control interface for day-2 operations, monitoring, and configuration.
-
-## Appliances
-
-| Appliance | Description | Template |
-|-----------|-------------|----------|
-| hazuh     | Wazuh SOC platform (indexer, manager, dashboard) | `templates/hazuh/rocky9_hazuh_amd64.tar.xz` |
-| zabbix    | Zabbix monitoring platform | `templates/zabbix/rocky9_zabbix_amd64.tar.xz` |
-| corrot    | Coroot observability platform | `templates/corrot/rocky9_corrot_amd64.tar.xz` |
-
-## Quick Deploy
+## Quick Start
 
 ```bash
+# Browse the catalog
+open https://pmoflow.pro/store
+
+# Deploy any template (example: Hazuh SOC)
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/rsdenck/pmstore/main/ct/hazuh.sh)"
+
+# Headless deploy with custom resources
+IP="192.168.130.10/24" GW="192.168.130.1" HOSTNAME="HAZUH01" \
+  var_cpu=2 var_ram=4096 var_disk=16 \
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/rsdenck/pmstore/main/ct/hazuh.sh)"
 ```
 
-For headless/automated deployments:
+All templates in the catalog (`scripts/`) follow the same one-liner pattern:
 
 ```bash
-export IP="192.168.130.10/24" GW="192.168.130.1" HOSTNAME="HAZUH01"
-export var_cpu=2 var_ram=4096 var_disk=16
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/rsdenck/pmstore/main/ct/hazuh.sh)"
+bash -c "$(curl -fsSL https://pmoflow.pro/scripts/{template}.sh)"
 ```
 
 ## Requirements
@@ -39,51 +34,41 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/rsdenck/pmstore/main/ct/
 
 ```
 pmstore/
-  ct/              # Deploy scripts (appliance wrappers)
-  core/            # PMStack framework (modular shell libraries)
+  ct/              # PMStack appliance deploy scripts (PMTUI wizard)
+  scripts/         # Community-style install scripts for 117+ templates
+  lib/             # PMStack framework modules
   bin/             # Pre-compiled PMTUI wizard binary
-  templates/       # Pre-baked appliance templates
-    hazuh/
-    zabbix/
-    corrot/
+  templates/       # Pre-baked appliance templates (coming soon)
   assets/          # Branding and static resources
 ```
 
-## PMTUI Management Console
+Source: [github.com/rsdenck/pmstore](https://github.com/rsdenck/pmstore)
 
-All appliances use PMTUI as the system shell. When you SSH into a container or open its console, PMTUI starts automatically, providing:
+## PMStack Appliances
 
-- System resource monitoring (CPU, RAM, disk, network)
-- Service health dashboard with appliance-aware filtering
-- Network configuration (static IP, DNS, gateway)
-- System logs viewer
-- Security hardening controls
-- SOC-hardened defaults
+SOC-hardened Rocky Linux 9 containers with PMTUI as the default management shell. Each appliance provides:
 
-No bash access is exposed to the user -- all management is done through the PMTUI interface.
-
-## Deploy Wizard
-
-The PMTUI deploy wizard handles the full provisioning lifecycle:
-
-1. Container creation (pct create with resource allocation)
-2. Root password initialization
-3. DNS configuration
-4. SSH setup (configurable port, disable option)
-5. PMTUI installation and shell registration
-6. Metadata writing
-7. SOC hardening (sysctl, kernel parameters)
-8. Network finalization (static IP assignment, hostname, tags)
-
-Supports both interactive TUI mode and headless text mode for automation.
-
-## Security
-
-- Unprivileged containers with keyctl and nesting features
-- SOC-inspired sysctl hardening (syncookies, rp_filter, IPv6 RA/redirect disable)
-- PMTUI-only access model (no direct shell)
+- PMTUI management console (resource monitoring, service dashboard, network config, logs)
+- Automated deploy wizard (interactive TUI or headless text mode)
+- SOC hardening (sysctl, unprivileged container, keyctl)
 - Static IP enforcement with bridge binding
+- No direct bash access -- all operations through PMTUI
+
+| Script | Appliance | Description |
+|--------|-----------|-------------|
+| `ct/hazuh.sh` | Hazuh | Wazuh SOC platform (indexer, manager, dashboard) |
+| `ct/zabbix.sh` | Zabbix | Enterprise monitoring platform |
+| `ct/corrot.sh` | Coroot | Observability platform |
+| `ct/vault.sh` | Vault | HashiCorp Vault (planned) |
+| `ct/suricata.sh` | Suricata | IDS/IPS engine (planned) |
+| `ct/zeek.sh` | Zeek | Network analysis (planned) |
+
+## Catalog
+
+All 117+ templates from the store are available as lightweight install scripts in `scripts/`. These are community-scripts-style one-liners that create a container with the specified software pre-installed and configured.
+
+Visit [pmoflow.pro/store](https://pmoflow.pro/store) to browse, filter by category, and generate custom install commands with your resource preferences.
 
 ---
 
-[PMStack Documentation](https://pmoflow.pro) | [GitHub](https://github.com/rsdenck/pmstore)
+[PMStack Documentation](https://pmoflow.pro) | [Template Catalog](https://pmoflow.pro/store) | [GitHub](https://github.com/rsdenck/pmstore)
